@@ -20,7 +20,11 @@ func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: String = #
     @MainActor static func main() async {
         let session = SessionTests(), persistence = PersistenceTests(), process = ProcessTests()
         let integration = ExternalAndInstallerTests()
+        let reachability = ReachabilityTests()
         var checks: [(String, @MainActor () async throws -> Void)] = [
+            ("credential authorization cache / silent observation / update", { try reachability.testCredentialsReuseAuthorizationAndUpdateCache() }),
+            ("batch ping / bounded concurrency / latency / redaction / no ADB", { try await reachability.testAllDevicesBoundedResultsAndNoADBCommands() }),
+            ("batch cancellation / queue cleanup / restart", { try await reachability.testCancellationStopsActiveTestsAndQueueBeforeRestart() }),
             ("concurrent sessions / selective disconnect", { try await session.testConcurrentSessionsAndStoppingOnePreservesOther() }),
             ("fixed task target", { try await session.testTasksBindTargetEvenWhenAnotherDeviceConnects() }),
             ("unauthorized transport remains available", { try await session.testUnauthorizedKeepsTunnelAndRejectsDeviceOperations() }),

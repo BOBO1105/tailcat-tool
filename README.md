@@ -25,11 +25,14 @@ swift run TailcatManager
 
 安装只在用户点击时运行；该次命令关闭 Homebrew 自动更新、已安装包升级、安装后清理和依赖包检查，避免额外变动。安装缺失工具所必需的依赖仍交由 Homebrew 处理。未检测到 Homebrew 时提供官方安装页面入口，需要先完成 Homebrew 安装。
 
-本地 `.app` 使用 ad-hoc 签名，不是经过 Developer ID 签名和公证的分发包。没有打包现有地址、私钥或命令二进制。
+本地 `.app` 默认使用固定的本机开发签名，不是经过 Developer ID 签名和公证的分发包。首次打包会在 `~/Library/Application Support/TailcatManager/Signing/` 创建专用签名钥匙串，后续打包复用；私钥不进入项目、应用包或 ZIP，不修改系统信任设置，用户的钥匙串搜索列表会保持原样。也可用环境变量 `TAILCAT_SIGNING_IDENTITY` 指定现有签名身份。请保留签名目录，重新生成身份会使已有授权失效。
+
+打包时发现目标应用正在运行，会将新版放到 `dist/<版本>/Tailcat Manager.app`，保留当前实例的连接；退出旧版后再打开新包。没有打包现有连接地址、用户私钥或外部工具二进制。
 
 ## 使用
 
 - 首次启动时，如果应用还没有设备，会导入现有 `tailcat-adb/users/` 地址簿。之后可点工具栏“导入地址簿”，只添加缺失用户，保留 GUI 内的编辑。
+- 工具栏“测试全部设备”可一键测试我的设备和临时设备的 Tailcat ping，显示每台的响应、延迟、直连或 DERP 中继路径、已有 ADB 状态和测试时间。每台 ping 5 秒超时，外层最多 8 秒，并发最多 3 台；支持取消和重试，不创建转发或执行 ADB connect/disconnect。结果是一次测试的快照：收到 pong 确认 Tailcat 可达；未收到 pong 也可能是服务器版本不支持或新链路建连超时，不能据此断定已有 ADB 离线。ADB 列显示当前已有会话的状态；未连接设备的 ADB 端口、授权和 Shell 权限仍需实际连接后检查。
 - 工具栏闪电按钮、侧栏“新建临时连接”或 `⌘⇧N` 可建立临时设备。只需填写连接地址，名称可选；本地端口默认自动分配。临时设备单独分组，支持多台同时连接以及全部常用 ADB 操作。
 - 临时配置和凭据仅保存在内存中，不写配置文件、Keychain 或 CLI 地址簿。断开后在本次运行中仍可重连；关闭临时设备或退出应用时停止其通道并清除临时配置。需要保留时点“保存到我的设备”，当前 UUID、通道和正在执行的任务保持，凭据从此保存到 Keychain。
 - 默认地址簿位于 `${XDG_STATE_HOME:-~/.local/state}/tailcat-adb`。Finder 启动不一定继承终端的 XDG 环境变量，自定义位置请在设置中指定。
@@ -48,7 +51,13 @@ swift run TailcatManager
 
 ## 配置与凭据
 
-设备连接地址存入本机 Keychain，读取或更新时可能出现 macOS 的 Keychain 授权提示。名称、端口和工具路径保存在：
+设备连接地址仍存入本机登录 Keychain。macOS 对 ad-hoc 和本机证书签名的程序使用每次构建的代码哈希进行额外授权检查，因此只固定 GUI 签名还不足以避免更新后重复授权。
+
+应用第一次启动会校验并安装一个固定版本的凭据助手到 `~/Library/Application Support/TailcatManager/CredentialHelper/v1/`，后续 GUI 更新复用同一文件。助手只接受与自己使用同一签名证书、且身份为 `cc.coauto.tailcat-manager` 的直接父进程；它只操作本应用服务下的 UUID 凭据，通过匿名管道传递数据，地址不进入命令参数或日志。设备凭据不迁出 Keychain。授权后的值仅在本次 GUI 运行的内存中缓存。
+
+首次切换到新版时，旧条目仍可能需要授权一次：输入登录钥匙串密码并点“始终允许”，每个设备条目独立授权。后台 CLI 检测禁止弹窗；需要授权时可主动点侧栏“授权识别 CLI 连接”，或连接该设备。保留固定助手和签名目录，正常更新不重新授权。开发时直接 `swift run TailcatManager` 使用开发进程自己的 Keychain 身份，授权可能与打包应用不同。
+
+名称、端口和工具路径保存在：
 
 ```text
 ~/Library/Application Support/TailcatManager/configuration.json
@@ -64,6 +73,7 @@ swift run TailcatManager
 swift run TailcatChecks
 swift run TailcatChecks --native-tailcat
 swift run TailcatChecks --native-tailcat --keychain
+bash scripts/check-signing.sh
 ```
 
 验证程序不依赖 XCTest / Swift Testing，适用于只有 Command Line Tools 的机器。覆盖双设备隔离、固定任务目标、待授权、连接取消、重连取消旧任务、异常退出、地址簿只读导入、配置权限、参数传递、双管道输出、进程超时和取消；另外覆盖临时设备不落盘、不访问持久凭据、独立关闭、保存时保留正在执行的任务、保存失败回滚，CLI 多端口识别、入口更换拒绝操作、元数据和 ADB/scrcpy 操作、退出取消 GUI 任务但保留 CLI 通道，以及 Homebrew 命令、批量安装、自动配置、失败和取消。安装行为使用模拟 Homebrew，不改动本机已安装组件。
@@ -71,6 +81,8 @@ swift run TailcatChecks --native-tailcat --keychain
 `--native-tailcat` 额外使用已安装 Tailcat 创建两个本地监听端口，验证就绪输出、端口避让和独立退出；使用官方公开示例地址，不拨号到远端，不连接真实车机。该验证不等于实车端到端验收。
 
 `--keychain` 使用随机 UUID 的模拟凭据验证 Keychain 的创建、读取、更新和删除，结束后删除测试条目，不读取真实设备凭据。
+
+`check-signing.sh` 使用随机 UUID 的模拟凭据，验证不同 GUI 构建复用固定助手后仍能无弹窗读取；ad-hoc 调用方及同证书但应用身份不同的调用方被拒绝。结束后删除测试条目及临时助手，不读取真实设备凭据。行为检查还覆盖凭据缓存更新、后台无交互读取、批量 ping 的并发上限、超时、取消、结果解析和输出脱敏。
 
 界面演示：
 

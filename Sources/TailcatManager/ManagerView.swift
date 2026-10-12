@@ -27,6 +27,7 @@ struct ManagerView: View {
     @State private var removeProfile: DeviceProfile?
     @State private var error: String?
     @State private var showSettings = false
+    @State private var showReachability = false
 
     var body: some View {
         NavigationSplitView {
@@ -52,6 +53,9 @@ struct ManagerView: View {
                     }
                     if let error = manager.externalScanError {
                         Text(error).font(.caption).foregroundStyle(.orange)
+                        Button("授权识别 CLI 连接") {
+                            Task { await manager.refreshExternalConnections(allowCredentialPrompt: true) }
+                        }.font(.caption)
                     }
                     InstallationSummary(installer: manager.componentInstaller, openSettings: { showSettings = true })
                 }.padding().frame(maxWidth: .infinity, alignment: .leading)
@@ -106,6 +110,11 @@ struct ManagerView: View {
         .frame(minWidth: 850, minHeight: 600)
         .toolbar {
             ToolbarItemGroup {
+                Button {
+                    showReachability = true
+                    if manager.reachability.results.isEmpty { manager.testAllDevices() }
+                } label: { Label("测试全部设备", systemImage: "waveform.path.ecg") }
+                    .help("一键测试全部设备的 Tailcat 可达性").disabled(manager.allProfiles.isEmpty)
                 Button { editor = DeviceEditorRequest(profile: nil, temporary: true) } label: { Label("临时连接", systemImage: "bolt.circle") }
                     .help("临时连接，不保存到我的设备").keyboardShortcut("n", modifiers: [.command, .shift])
                 Button { editor = DeviceEditorRequest(profile: nil) } label: { Label("添加设备", systemImage: "plus") }
@@ -124,6 +133,7 @@ struct ManagerView: View {
             TransferView(manager: manager, request: request)
         }
         .sheet(isPresented: $showSettings) { ToolSettingsView(manager: manager) }
+        .sheet(isPresented: $showReachability) { ReachabilityView(manager: manager, checker: manager.reachability) }
         .alert("操作未完成", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("好") { error = nil }
         } message: { Text(error ?? "") }

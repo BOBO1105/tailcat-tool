@@ -35,4 +35,7 @@ id_dsa
 *.pub
 *.keystore
 *.jks
+*.keychain
+*.keychain-db
+keychain-password
 *.mobileprovision

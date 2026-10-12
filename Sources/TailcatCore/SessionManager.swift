@@ -12,6 +12,7 @@ import Combine
     @Published public var notice: String?
     public let componentInstaller: ComponentInstaller
     public let allowsComponentInstallation: Bool
+    public let reachability: ReachabilityChecker
 
     private struct Runtime {
         let connection: ForwardConnection
@@ -60,12 +61,13 @@ import Combine
         self.profiles = configuration.profiles
         self.tools = configuration.tools
         self.configurationStore = configurationStore
-        self.credentials = credentials
+        self.credentials = CachedCredentialStore(credentials)
         self.runner = runner
         self.monitorInterval = monitorInterval
         self.makeTransport = makeTransport
         self.cliScanner = cliScanner
         self.componentInstaller = ComponentInstaller(runner: runner)
+        self.reachability = ReachabilityChecker(runner: runner)
         self.allowsComponentInstallation = allowsComponentInstallation
         for profile in profiles { sessions[profile.id] = DeviceSession() }
     }
@@ -102,7 +104,7 @@ import Combine
         }
     }
 
-    public func refreshExternalConnections() async {
+    public func refreshExternalConnections(allowCredentialPrompt: Bool = false) async {
         guard let cliScanner, !externalScanInProgress else { return }
         externalScanInProgress = true
         defer { externalScanInProgress = false }
@@ -112,7 +114,7 @@ import Combine
                 adbPath: tools.adb, addressForProfile: { [weak self] id in
                     guard let self else { return nil }
                     if let cached = self.externalCredentials[id] { return cached }
-                    let address = try self.credentials.read(id: id)
+                    let address = try allowCredentialPrompt ? self.credentials.read(id: id) : self.credentials.readForObservation(id: id)
                     self.externalCredentials[id] = address
                     return address
                 })
@@ -145,6 +147,7 @@ import Combine
     public func shutdown() async {
         externalRevision = UUID(); cliMonitor?.cancel(); cliMonitor = nil
         await componentInstaller.shutdown()
+        await reachability.shutdown()
         let operations = Array(taskJobs.values) + Array(diagnosticJobs.values) + Array(informationJobs.values)
         for job in operations { job.cancel() }
         for job in operations { await job.value }
@@ -498,6 +501,14 @@ import Combine
         for (id, runtime) in runtimes {
             retryCounts[id] = 0; nextRetries[id] = nil
             startMonitor(id, generation: runtime.generation)
+        }
+    }
+
+    public func testAllDevices() {
+        reachability.start(profiles: allProfiles, tailcatPath: tools.tailcat,
+                           temporaryIDs: Set(temporaryProfiles.map(\.id)),
+                           adbState: { [weak self] id in self?.session(id).state ?? .disconnected }) { [weak self] id in
+            try self?.address(for: id)
         }
     }
 

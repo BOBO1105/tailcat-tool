@@ -3,8 +3,42 @@ import Security
 
 public protocol CredentialStore: AnyObject {
     func read(id: UUID) throws -> String?
+    func readForObservation(id: UUID) throws -> String?
     func write(_ address: String, id: UUID) throws
     func delete(id: UUID) throws
+}
+
+public extension CredentialStore {
+    func readForObservation(id: UUID) throws -> String? { try read(id: id) }
+}
+
+/// Reuse an authorized read for this process; never persist the cache.
+public final class CachedCredentialStore: CredentialStore {
+    private enum Entry { case value(String), missing }
+    private var cache: [UUID: Entry] = [:]
+    private let base: any CredentialStore
+    private let lock = NSRecursiveLock()
+    public init(_ base: any CredentialStore) { self.base = base }
+    public func read(id: UUID) throws -> String? { try load(id, observing: false) }
+    public func readForObservation(id: UUID) throws -> String? { try load(id, observing: true) }
+    private func load(_ id: UUID, observing: Bool) throws -> String? {
+        lock.lock(); defer { lock.unlock() }
+        if let entry = cache[id] {
+            if case let .value(value) = entry { return value }
+            return nil
+        }
+        let value = try observing ? base.readForObservation(id: id) : base.read(id: id)
+        cache[id] = value.map(Entry.value) ?? .missing
+        return value
+    }
+    public func write(_ address: String, id: UUID) throws {
+        lock.lock(); defer { lock.unlock() }
+        try base.write(address, id: id); cache[id] = .value(address)
+    }
+    public func delete(id: UUID) throws {
+        lock.lock(); defer { lock.unlock() }
+        try base.delete(id: id); cache[id] = .missing
+    }
 }
 
 public final class MemoryCredentialStore: CredentialStore {
@@ -34,6 +68,15 @@ public final class KeychainCredentialStore: CredentialStore {
             throw ManagerError.message("Keychain 中的连接凭据无法读取")
         }
         return value
+    }
+    public func readForObservation(id: UUID) throws -> String? {
+        // These items live in the legacy login keychain. Data Protection-only
+        // authentication query flags do not suppress its ACL dialogs.
+        var allowed: DarwinBoolean = false
+        try check(SecKeychainGetUserInteractionAllowed(&allowed))
+        try check(SecKeychainSetUserInteractionAllowed(false))
+        defer { SecKeychainSetUserInteractionAllowed(allowed.boolValue) }
+        return try read(id: id)
     }
     public func write(_ address: String, id: UUID) throws {
         let q = query(id)

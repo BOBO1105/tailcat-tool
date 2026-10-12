@@ -75,8 +75,14 @@ struct TailcatManagerApp: App {
             do {
                 let configuration = try store.load()
                 let runner = ProcessRunner()
+                let credentials: any CredentialStore
+                if let helper = Bundle.main.url(forAuxiliaryExecutable: "TailcatCredentialHelper") {
+                    credentials = try HelperCredentialStore(bundledHelper: helper)
+                } else if Bundle.main.bundleIdentifier != nil {
+                    throw ManagerError.message("应用包缺少凭据助手，请重新打包")
+                } else { credentials = KeychainCredentialStore() }
                 manager = SessionManager(configuration: configuration, configurationStore: store,
-                                         credentials: KeychainCredentialStore(), runner: runner,
+                                         credentials: credentials, runner: runner,
                                          cliScanner: CLISessionScanner(runner: runner))
                 startupError = nil
                 // Compatibility is a read-only import, never a transfer of CLI PID/log ownership.
