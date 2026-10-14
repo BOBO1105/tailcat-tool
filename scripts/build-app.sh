@@ -22,6 +22,8 @@ cp "$TASK_BIN/TailcatManager" "$TASK_APP/Contents/MacOS/TailcatManager"
 cp "$TASK_BIN/TailcatCredentialHelper" "$TASK_APP/Contents/MacOS/TailcatCredentialHelper"
 cp "$TASK_ROOT/resources/Info.plist" "$TASK_APP/Contents/Info.plist"
 cp "$TASK_ROOT/resources/AppIcon.icns" "$TASK_APP/Contents/Resources/AppIcon.icns"
+cp "$TASK_ROOT/LICENSE" "$TASK_APP/Contents/Resources/LICENSE"
+cp "$TASK_ROOT/THIRD_PARTY_NOTICES.md" "$TASK_APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
 bash "$TASK_ROOT/scripts/sign-app.sh" "$TASK_APP/Contents/MacOS/TailcatCredentialHelper" cc.coauto.tailcat-manager.credentials
 bash "$TASK_ROOT/scripts/sign-app.sh" "$TASK_APP"
 TASK_ZIP="$TASK_ROOT/dist/Tailcat-Manager-${TASK_VERSION}.zip"

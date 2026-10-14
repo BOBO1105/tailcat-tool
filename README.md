@@ -2,6 +2,10 @@
 
 SwiftUI 设备侧栏应用，管理多个独立 Tailcat → ADB 会话。第一版面向本机使用，macOS 13 及以上；当前构建目标为 Apple Silicon。
 
+下载最新版：[GitHub Releases](https://github.com/suyunkai/tailcat-tool/releases/latest)。发行 ZIP 仅包含应用包；`SHA256SUMS` 用于核对下载文件。Tailcat、ADB 和 scrcpy 由本机工具或 Homebrew 提供。
+
+项目源码采用 [MIT License](LICENSE)。官方 Tailcat 猫图参考及衍生应用图标保留上游 BSD 3-Clause 许可，详见 [第三方素材声明](THIRD_PARTY_NOTICES.md)。
+
 ## 构建和启动
 
 需要 macOS Command Line Tools（Swift 5.9+）或 Xcode，以及支持 `forward`、`parse` 的 Tailcat。已验证本机 Tailcat v0.7.0。
